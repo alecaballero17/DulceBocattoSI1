@@ -756,49 +756,92 @@ def historial_proveedores_pdf(request):
 
 # ================================================================
 # CU26 – Historial de entregas (repartidor / fechas / estado)
+# Backend completo (vistas y helpers) — Comentado línea por línea
+# Archivo sugerido: accounts/views_reportes.py
 # ================================================================
+
+# ----------------- IMPORTS BÁSICOS -----------------
+from __future__ import annotations  # Permite anotaciones de tipos "modernas".
+from typing import List, Dict, Any, Optional
+
+import csv  # Para exportar CSV
+from django.http import HttpResponse  # Respuestas HTTP (CSV/HTML/PDF)
+from django.shortcuts import render    # Render de templates
+from django.contrib.auth.decorators import login_required  # Requiere login
+
+# Ajusta el import del permiso según tu proyecto:
+# Si tu decorador está en otro módulo, cámbialo (por ejemplo: from core.permissions import requiere_permiso)
+from .permissions import requiere_permiso  # Decorador de permiso (PEDIDO_READ, etc.)
+
+from django.db import connection  # Cursor para ejecutar SQL nativo (parametrizado y seguro)
+
+
+# ----------------- ORDENAMIENTO SEGURO -----------------
 def _build_order_mysql_entregas(sort: str, direction: str) -> str:
     """
-    ORDER BY seguro para MySQLdb: columnas calificadas (evita ambigüedad)
-    y % escapados como %% dentro de DATE_FORMAT.
+    Construye un ORDER BY seguro (lista blanca de columnas) para MySQL.
+
+    - Acepta solo columnas y direcciones válidas (evita inyección/ambigüedades).
+    - Escapa % como %% dentro de DATE_FORMAT porque se usa en f-strings.
+    - Para ASC mueve nulos al final con CASE WHEN ... IS NULL.
     """
+    # Normalizamos la dirección: si no viene, por defecto 'desc'; y la pasamos a minúsculas.
     direction = (direction or "desc").lower()
+    # Solo aceptamos 'asc' o 'desc'. Si viene otra cosa, forzamos 'desc'.
     if direction not in ("asc", "desc"):
         direction = "desc"
 
+    # "Lista blanca" de expresiones de columnas permitidas para ordenar.
+    # Se usan columnas calificadas (p., e., c., u.) para evitar ambigüedades en JOINs.
     allowed = {
         "fecha":      "DATE_FORMAT(p.created_at, '%%Y-%%m-%%d %%H:%%i')",
         "repartidor": "COALESCE(NULLIF(TRIM(e.nombre_repartidor), ''), '—')",
         "cliente":    "COALESCE(NULLIF(TRIM(c.nombre), ''), u.email)",
         "estado":     "e.estado",
     }
+
+    # Tomamos la columna pedida si está permitida; por defecto usamos fecha.
     col = allowed.get((sort or "").lower(), allowed["fecha"])
 
+    # Si el orden es ascendente, colocamos los nulos al final y luego la columna asc.
     if direction == "asc":
         return f"CASE WHEN {col} IS NULL THEN 1 ELSE 0 END, {col} ASC"
+
+    # En caso contrario, descendente.
     return f"{col} DESC"
 
 
+# ----------------- CONSULTA PRINCIPAL CON FILTROS -----------------
 def _fetch_historial_entregas(
-    q: str | None,
-    estado: str | None,
-    d1: str | None,
-    d2: str | None,
-    order_sql: str | None,
-):
+    q: Optional[str],
+    estado: Optional[str],
+    d1: Optional[str],
+    d2: Optional[str],
+    order_sql: Optional[str],
+) -> List[Dict[str, Any]]:
     """
-    Devuelve una fila por envío/entrega con joins a cliente.
-    Nota: la BD no tiene e.comentarios, por eso devolvemos '' AS comentario.
+    Ejecuta la consulta SQL que devuelve el historial de entregas.
+
+    - Filtros:
+        * q: busca por repartidor o cliente (LIKE)
+        * estado: filtra estado exacto del envío
+        * d1/d2: rango de fechas sobre p.created_at (fecha del pedido)
+    - Joins:
+        envio e → pedido p → cliente c (LEFT) → usuario u (LEFT)
+    - Devuelve lista de diccionarios, amigables para el template/exports.
+
+    Nota: En esta versión no existe e.comentarios; por eso devolvemos '' AS comentario.
     """
-    # --------- expresiones columna (reutilizables) ----------
-    fecha_expr       = "p.created_at"
-    repartidor_expr  = "COALESCE(NULLIF(TRIM(e.nombre_repartidor), ''), '—')"
-    cliente_expr     = "COALESCE(NULLIF(TRIM(c.nombre), ''), u.email)"
+    # Expresiones reutilizables para columnas "limpias"
+    fecha_expr = "p.created_at"
+    repartidor_expr = "COALESCE(NULLIF(TRIM(e.nombre_repartidor), ''), '—')"
+    cliente_expr = "COALESCE(NULLIF(TRIM(c.nombre), ''), u.email)"
 
-    # --------- filtros dinámicos ----------
-    where_clauses: list[str] = ["1=1"]
-    params: list = []
+    # Armado del WHERE dinámico
+    where_clauses: List[str] = ["1=1"]  # Punto de partida neutro.
+    params: List[Any] = []              # Lista de parámetros (previene inyección SQL).
 
+    # Búsqueda general en repartidor o cliente
     if q:
         where_clauses.append(f"""(
             {repartidor_expr} LIKE CONCAT('%%', %s, '%%')
@@ -806,10 +849,12 @@ def _fetch_historial_entregas(
         )""")
         params.extend([q, q])
 
+    # Filtro por estado exacto si viene
     if estado:
         where_clauses.append("e.estado = %s")
         params.append(estado)
 
+    # Rango de fechas (sobre DATE(p.created_at))
     if d1:
         where_clauses.append(f"DATE({fecha_expr}) >= %s")
         params.append(d1)
@@ -817,9 +862,13 @@ def _fetch_historial_entregas(
         where_clauses.append(f"DATE({fecha_expr}) <= %s")
         params.append(d2)
 
+    # Unimos los filtros con AND
     where_sql = " AND ".join(where_clauses)
+
+    # Si no se pasó un ORDER BY, usamos fecha descendente por defecto
     order_sql = order_sql or "DATE_FORMAT(p.created_at, '%%Y-%%m-%%d %%H:%%i') DESC"
 
+    # SQL principal (con columnas calificadas y alias legibles)
     sql = f"""
         SELECT
             e.id                                        AS envio_id,
@@ -841,32 +890,46 @@ def _fetch_historial_entregas(
         LIMIT 1000
     """
 
-    from django.db import connection
+    # Ejecutamos de forma segura con parámetros
     with connection.cursor() as cur:
         cur.execute(sql, params)
-        cols = [c[0] for c in cur.description]
-        return [dict(zip(cols, row)) for row in cur.fetchall()]
+        cols = [c[0] for c in cur.description]       # Nombres de columnas devueltas
+        return [dict(zip(cols, row)) for row in cur.fetchall()]  # Lista de dicts
 
 
+# ----------------- VISTA PRINCIPAL (PANTALLA) -----------------
 @login_required
-@requiere_permiso("PEDIDO_READ")  # o ENVIO_READ si lo tienes
+@requiere_permiso("PEDIDO_READ")  # Ajusta si usas ENVIO_READ u otro permiso
 def historial_entregas(request):
-    q   = (request.GET.get("q") or "").strip() or None
-    st  = (request.GET.get("estado") or "").strip() or None
-    d1  = (request.GET.get("d1") or "").strip() or None
-    d2  = (request.GET.get("d2") or "").strip() or None
+    """
+    Vista de /reportes/entregas/ (pantalla principal del CU26).
+
+    - Lee filtros GET (q, estado, d1, d2) y orden (sort, dir).
+    - Llama a helpers para construir ORDER BY y ejecutar la consulta.
+    - Calcula KPIs simples y renderiza el template.
+    """
+    # Lee valores de la querystring y normaliza espacios / None
+    q = (request.GET.get("q") or "").strip() or None
+    st = (request.GET.get("estado") or "").strip() or None
+    d1 = (request.GET.get("d1") or "").strip() or None
+    d2 = (request.GET.get("d2") or "").strip() or None
     sort = request.GET.get("sort", "fecha")
     direction = request.GET.get("dir", "desc")
 
+    # ORDER BY seguro
     order_sql = _build_order_mysql_entregas(sort, direction)
+    # Datos (filas a mostrar)
     rows = _fetch_historial_entregas(q, st, d1, d2, order_sql)
 
+    # KPIs para la cabecera
     total_envios = len(rows)
     total_entregados = sum(1 for r in rows if (r.get("estado") or "").upper() == "ENTREGADO")
 
+    # Calcula la próxima dirección para cada encabezado clickeable (asc/desc)
     def _next_dir(col: str) -> str:
         return "asc" if (direction == "desc" or sort != col) else "desc"
 
+    # Render del template con todo el contexto necesario
     return render(request, "accounts/historial_entregas.html", {
         "rows": rows,
         "q": q or "",
@@ -885,20 +948,28 @@ def historial_entregas(request):
     })
 
 
-
-# ----------------- Exportaciones CU26 -----------------
+# ----------------- EXPORTACIÓN: CSV -----------------
 @login_required
 @requiere_permiso("PEDIDO_READ")
 def historial_entregas_csv(request):
-    q  = (request.GET.get("q") or "").strip() or None
+    """
+    Exporta el mismo resultado del CU26 a CSV (para Excel).
+    Conserva filtros (q, estado, d1, d2) y ordena por fecha DESC.
+    """
+    # Recupera filtros
+    q = (request.GET.get("q") or "").strip() or None
     st = (request.GET.get("estado") or "").strip() or None
     d1 = (request.GET.get("d1") or "").strip() or None
     d2 = (request.GET.get("d2") or "").strip() or None
 
+    # Reutiliza la consulta con ORDER por fecha desc.
     rows = _fetch_historial_entregas(q, st, d1, d2, _build_order_mysql_entregas("fecha", "desc"))
 
+    # Respuesta tipo CSV con descarga forzada
     resp = HttpResponse(content_type="text/csv; charset=utf-8")
     resp["Content-Disposition"] = 'attachment; filename="historial_entregas.csv"'
+
+    # Escribimos cabeceras y filas
     w = csv.writer(resp)
     w.writerow(["Envío", "Fecha", "Repartidor", "Cliente", "Pedido", "Estado", "Comentario"])
     for r in rows:
@@ -909,21 +980,29 @@ def historial_entregas_csv(request):
             r.get("cliente", "") or "",
             r.get("pedido_id", "") or "",
             r.get("estado", "") or "",
-            (r.get("comentario") or "").replace("\n", " ").strip()
+            (r.get("comentario") or "").replace("\n", " ").strip(),
         ])
     return resp
 
 
+# ----------------- EXPORTACIÓN: HTML -----------------
 @login_required
 @requiere_permiso("PEDIDO_READ")
 def historial_entregas_html(request):
-    q  = (request.GET.get("q") or "").strip() or None
+    """
+    Exporta el resultado del CU26 a una página HTML simple (imprimible).
+    Conserva filtros (q, estado, d1, d2) y ordena por fecha DESC.
+    """
+    # Recupera filtros
+    q = (request.GET.get("q") or "").strip() or None
     st = (request.GET.get("estado") or "").strip() or None
     d1 = (request.GET.get("d1") or "").strip() or None
     d2 = (request.GET.get("d2") or "").strip() or None
 
+    # Reutiliza la consulta con ORDER por fecha desc.
     rows = _fetch_historial_entregas(q, st, d1, d2, _build_order_mysql_entregas("fecha", "desc"))
 
+    # Construcción de HTML crudo (estilo minimal para impresión)
     html = [
         "<!doctype html><html><head><meta charset='utf-8'><title>Historial de entregas</title>",
         "<style>table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:6px}th{background:#f6f6f6;text-align:left}</style>",
@@ -947,12 +1026,21 @@ def historial_entregas_html(request):
             "</tr>"
         )
     html.append("</tbody></table></body></html>")
+
+    # Entregamos HTML listo para imprimir/guardar
     return HttpResponse("".join(html), content_type="text/html; charset=utf-8")
 
 
+# ----------------- EXPORTACIÓN: PDF (ReportLab) -----------------
 @login_required
 @requiere_permiso("PEDIDO_READ")
 def historial_entregas_pdf(request):
+    """
+    Exporta el resultado del CU26 a PDF usando ReportLab.
+    - Genera tabla con salto de página y reimpresión de encabezados.
+    - Si reportlab no está instalado, devuelve un mensaje instructivo.
+    """
+    # Import diferido: si no está instalado, devolvemos un aviso claro.
     try:
         from reportlab.lib.pagesizes import A4, landscape
         from reportlab.pdfgen import canvas
@@ -964,21 +1052,26 @@ def historial_entregas_pdf(request):
             status=200,
         )
 
-    q  = (request.GET.get("q") or "").strip() or None
+    # Recupera filtros
+    q = (request.GET.get("q") or "").strip() or None
     st = (request.GET.get("estado") or "").strip() or None
     d1 = (request.GET.get("d1") or "").strip() or None
     d2 = (request.GET.get("d2") or "").strip() or None
 
+    # Reutiliza la consulta con ORDER por fecha desc.
     rows = _fetch_historial_entregas(q, st, d1, d2, _build_order_mysql_entregas("fecha", "desc"))
 
+    # Respuesta PDF (descarga forzada)
     resp = HttpResponse(content_type="application/pdf")
     resp["Content-Disposition"] = 'attachment; filename="historial_entregas.pdf"'
 
+    # Configuración de lienzo y geometría de página
     p = canvas.Canvas(resp, pagesize=landscape(A4))
     width, height = landscape(A4)
     x = 2 * cm
     y = height - 2 * cm
 
+    # Título y filtros aplicados
     p.setFont("Helvetica-Bold", 14)
     p.drawString(x, y, "Historial de entregas")
     y -= 0.8 * cm
@@ -986,15 +1079,18 @@ def historial_entregas_pdf(request):
     p.drawString(x, y, f"Filtro: {q or '-'} | Estado: {st or '-'} | Desde: {d1 or '-'} | Hasta: {d2 or '-'}")
     y -= 1.0 * cm
 
+    # Encabezados de tabla y posiciones X de columnas
     headers = ["#", "Fecha", "Repartidor", "Cliente", "Pedido", "Estado", "Comentario"]
     col_x = [x, x + 3.2*cm, x + 9.2*cm, x + 16.2*cm, x + 23*cm, x + 27*cm, x + 31*cm]
 
+    # Dibuja encabezados
     p.setFont("Helvetica-Bold", 10)
     for i, h in enumerate(headers):
         p.drawString(col_x[i], y, h)
     y -= 0.6 * cm
     p.setFont("Helvetica", 10)
 
+    # Filas con salto de página cuando no hay espacio
     for r in rows:
         if y < 1.5 * cm:
             p.showPage()
@@ -1014,12 +1110,45 @@ def historial_entregas_pdf(request):
             (r.get("comentario") or "")[:80].replace("\n", " "),
         ]
         for i, v in enumerate(vals):
-            p.drawString(col_x[i], y, v[:60])
+            p.drawString(col_x[i], y, v[:60])  # Corta simple para evitar desbordes largos
         y -= 0.55 * cm
 
+    # Finaliza el documento
     p.showPage()
     p.save()
     return resp
+
+
+# ========================= NOTAS RÁPIDAS =========================
+# 1) Rutas (urls.py):
+#    Asegúrate de tener en accounts/urls.py algo como:
+#
+#    from .views_reportes import (
+#        historial_entregas,
+#        historial_entregas_csv,
+#        historial_entregas_html,
+#        historial_entregas_pdf,
+#    )
+#
+#    urlpatterns += [
+#        path("reportes/entregas/", historial_entregas, name="historial_entregas"),
+#        path("reportes/entregas/export.csv",  historial_entregas_csv,  name="historial_entregas_csv"),
+#        path("reportes/entregas/export.html", historial_entregas_html, name="historial_entregas_html"),
+#        path("reportes/entregas/export.pdf",  historial_entregas_pdf,  name="historial_entregas_pdf"),
+#    ]
+#
+# 2) Template:
+#    Ver templates/accounts/historial_entregas.html (el que te pasé antes con comentarios).
+#
+# 3) Requisitos:
+#    - Usuario autenticado con permiso "PEDIDO_READ" (o el que uses).
+#    - Para PDF: pip install reportlab
+#
+# 4) Índices sugeridos (MySQL):
+#    - pedido(created_at), envio(pedido_id), envio(estado), cliente(nombre)
+#
+# 5) Si tu tabla 'envio' tiene telefono_repartidor NOT NULL:
+#    - No afecta estas vistas (no se inserta desde aquí).
 
 
 
