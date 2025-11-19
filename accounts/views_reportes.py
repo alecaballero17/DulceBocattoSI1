@@ -761,7 +761,6 @@ def historial_proveedores_pdf(request):
 # ================================================================
 
 # ----------------- IMPORTS BÁSICOS -----------------
-from __future__ import annotations  # Permite anotaciones de tipos "modernas".
 from typing import List, Dict, Any, Optional
 
 import csv  # Para exportar CSV

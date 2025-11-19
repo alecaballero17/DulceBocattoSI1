@@ -1,68 +1,197 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>Historial de entregas</h2>
+<!-- 
+  Pantalla del CU26: Historial de entregas
+  - Filtros vía GET (q, estado, d1, d2)
+  - Botones de exportación (CSV/HTML/PDF) conservando filtros
+  - Tabla ordenable por fecha/repartidor/cliente/estado
+-->
 
-<form class="row g-2 my-3" method="get">
-  <div class="col-md-4">
-    <input class="form-control" type="text" name="q" value="{{ q }}" placeholder="Buscar por repartidor o cliente">
-  </div>
-  <div class="col-md-3">
-    <select class="form-select" name="estado">
-      <option value="">-- Estado --</option>
-      {% for e in ESTADOS %}
-        <option value="{{ e }}" {% if estado == e %}selected{% endif %}>{{ e }}</option>
-      {% endfor %}
-    </select>
-  </div>
-  <div class="col-md-2">
-    <input class="form-control" type="date" name="d1" value="{{ d1 }}" placeholder="Desde">
-  </div>
-  <div class="col-md-2">
-    <input class="form-control" type="date" name="d2" value="{{ d2 }}" placeholder="Hasta">
-  </div>
-  <div class="col-md-1 d-grid">
-    <button class="btn btn-primary">Filtrar</button>
-  </div>
-</form>
+<div class="container-fluid py-2">
 
-<div class="small text-muted mb-2">
-  Entregas: <b>{{ total_envios }}</b>
-</div>
+  <!-- TÍTULO -->
+  <div class="d-flex align-items-center justify-content-between">
+    <h2 class="mt-2 mb-3">Historial de entregas</h2>
+  </div>
 
-<div class="table-responsive">
-  <table class="table table-sm align-middle">
-    <thead>
-      <tr>
-        <th class="text-nowrap">
-          <a href="?q={{ q }}&estado={{ estado }}&d1={{ d1 }}&d2={{ d2 }}&sort=fecha&dir={{ next_dir_fecha }}">Fecha</a>
-        </th>
-        <th>
-          <a href="?q={{ q }}&estado={{ estado }}&d1={{ d1 }}&d2={{ d2 }}&sort=repartidor&dir={{ next_dir_rep }}">Repartidor</a>
-        </th>
-        <th>
-          <a href="?q={{ q }}&estado={{ estado }}&d1={{ d1 }}&d2={{ d2 }}&sort=cliente&dir={{ next_dir_cli }}">Cliente</a>
-        </th>
-        <th>Pedido</th>
-        <th>
-          <a href="?q={{ q }}&estado={{ estado }}&d1={{ d1 }}&d2={{ d2 }}&sort=estado&dir={{ next_dir_est }}">Estado</a>
-        </th>
-        <th>Comentario</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for r in rows %}
+  <!-- ===========================
+       FORMULARIO DE FILTROS (GET)
+       =========================== -->
+  <form class="row g-2 align-items-end mb-3" method="get">
+    <!-- 
+      method="get": los valores viajan en la URL, lo que facilita compartir la vista 
+      y también reutilizar los mismos filtros para exportar.
+    -->
+
+    <!-- Buscar por repartidor o cliente -->
+    <div class="col-md-4">
+      <label class="form-label">Buscar</label>
+      <input class="form-control" type="text" name="q" value="{{ q }}" placeholder="Repartidor o cliente">
+    </div>
+
+    <!-- Estado -->
+    <div class="col-md-3">
+      <label class="form-label">Estado</label>
+      <select class="form-select" name="estado">
+        <option value="">-- Todos --</option>
+        {% for e in ESTADOS %}
+          <option value="{{ e }}" {% if estado == e %}selected{% endif %}>{{ e }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- Fecha desde -->
+    <div class="col-md-2">
+      <label class="form-label">Desde</label>
+      <input class="form-control" type="date" name="d1" value="{{ d1 }}">
+    </div>
+
+    <!-- Fecha hasta -->
+    <div class="col-md-2">
+      <label class="form-label">Hasta</label>
+      <input class="form-control" type="date" name="d2" value="{{ d2 }}">
+    </div>
+
+    <!-- Botón FILTRAR -->
+    <div class="col-md-1 d-grid">
+      <button class="btn btn-primary">Filtrar</button>
+    </div>
+
+    <!-- Mantener sort/dir actuales al reenviar el filtro (opcional) -->
+    <input type="hidden" name="sort" value="{{ sort }}">
+    <input type="hidden" name="dir" value="{{ dir }}">
+  </form>
+
+  <!-- ===========================
+       BOTONES DE EXPORTACIÓN
+       =========================== -->
+  <div class="d-flex justify-content-end mb-3 gap-2">
+    <!--
+      Cada enlace usa la URL nombrada de exportación e inyecta los mismos filtros actuales.
+      Así, lo exportado coincide exactamente con lo que ves filtrado en la tabla.
+    -->
+    <a class="btn btn-outline-secondary btn-sm"
+       href="{% url 'historial_entregas_csv' %}?q={{ q }}&estado={{ estado }}&d1={{ d1 }}&d2={{ d2 }}&sort={{ sort }}&dir={{ dir }}">
+      📄 Exportar CSV
+    </a>
+
+    <a class="btn btn-outline-secondary btn-sm"
+       href="{% url 'historial_entregas_html' %}?q={{ q }}&estado={{ estado }}&d1={{ d1 }}&d2={{ d2 }}&sort={{ sort }}&dir={{ dir }}">
+      🌐 Exportar HTML
+    </a>
+
+    <a class="btn btn-outline-secondary btn-sm"
+       href="{% url 'historial_entregas_pdf' %}?q={{ q }}&estado={{ estado }}&d1={{ d1 }}&d2={{ d2 }}&sort={{ sort }}&dir={{ dir }}">
+      🧾 Exportar PDF
+    </a>
+  </div>
+
+  <!-- ===========================
+       KPIs / RESUMEN
+       =========================== -->
+  <div class="small text-muted mb-2">
+    Entregas: <b>{{ total_envios }}</b>
+    &nbsp;|&nbsp;
+    Entregadas: <b>{{ total_entregados }}</b>
+    <!-- Puedes agregar más KPIs si lo necesitas -->
+  </div>
+
+  <!-- ===========================
+       TABLA ORDENABLE
+       =========================== -->
+  <div class="table-responsive">
+    <table class="table table-sm align-middle">
+      <thead>
         <tr>
-          <td class="text-nowrap">{{ r.fecha|default:"—" }}</td>
-          <td>{{ r.repartidor|default:"—" }}</td>
-          <td>{{ r.cliente|default:"—" }}</td>
-          <td>#{{ r.pedido_id }}</td>
-          <td>{{ r.estado }}</td>
-          <td class="text-muted">{{ r.comentario|default:"" }}</td>
+          <!-- 
+            Los encabezados son enlaces que inyectan sort/dir.
+            next_dir_* viene precalculado desde la vista para alternar asc/desc.
+            Preservamos filtros (q, estado, d1, d2).
+          -->
+          <th class="text-nowrap">
+            <a href="?q={{ q }}&estado={{ estado }}&d1={{ d1 }}&d2={{ d2 }}&sort=fecha&dir={{ next_dir_fecha }}">
+              Fecha
+              {% if sort == "fecha" %}
+                <small class="text-muted">({{ dir|upper }})</small>
+              {% endif %}
+            </a>
+          </th>
+          <th class="text-nowrap">
+            <a href="?q={{ q }}&estado={{ estado }}&d1={{ d1 }}&d2={{ d2 }}&sort=repartidor&dir={{ next_dir_rep }}">
+              Repartidor
+              {% if sort == "repartidor" %}
+                <small class="text-muted">({{ dir|upper }})</small>
+              {% endif %}
+            </a>
+          </th>
+          <th class="text-nowrap">
+            <a href="?q={{ q }}&estado={{ estado }}&d1={{ d1 }}&d2={{ d2 }}&sort=cliente&dir={{ next_dir_cli }}">
+              Cliente
+              {% if sort == "cliente" %}
+                <small class="text-muted">({{ dir|upper }})</small>
+              {% endif %}
+            </a>
+          </th>
+          <th class="text-nowrap">Pedido</th>
+          <th class="text-nowrap">
+            <a href="?q={{ q }}&estado={{ estado }}&d1={{ d1 }}&d2={{ d2 }}&sort=estado&dir={{ next_dir_est }}">
+              Estado
+              {% if sort == "estado" %}
+                <small class="text-muted">({{ dir|upper }})</small>
+              {% endif %}
+            </a>
+          </th>
+          <th class="text-nowrap">Método envío</th>
+          <th class="text-nowrap">Dirección</th>
+          <th class="text-nowrap">Total</th>
+          <th class="text-nowrap">Comentario</th>
         </tr>
-      {% empty %}
-        <tr><td colspan="6" class="text-muted">No hay registros.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+      </thead>
+      <tbody>
+        <!-- 
+          Iteramos las filas que la vista entregó en "rows".
+          Cada r.* corresponde a los alias seleccionados en el SELECT (fecha, repartidor, cliente, etc.).
+        -->
+        {% for r in rows %}
+          <tr>
+            <td>{{ r.fecha }}</td>
+            <td>{{ r.repartidor }}</td>
+            <td>{{ r.cliente }}</td>
+            <td>{{ r.pedido_id }}</td>
+            <td>
+              {# Badge simple según estado (ajusta colores si quieres) #}
+{% with est=r.estado|upper %}
+    {% if est == "ENTREGADO" %}
+        <span class="badge text-bg-success">{{ r.estado }}</span>
+    {% elif est == "EN_CAMINO" %}
+        <span class="badge text-bg-warning">{{ r.estado }}</span>
+    {% elif est == "PENDIENTE" %}
+        <span class="badge text-bg-secondary">{{ r.estado }}</span>
+    {% elif est == "CANCELADO" %}
+        <span class="badge text-bg-danger">{{ r.estado }}</span>
+    {% else %}
+        <span class="badge text-bg-light">{{ r.estado }}</span>
+    {% endif %}
+{% endwith %}
+
+            </td>
+            <td>{{ r.metodo_envio }}</td>
+            <td>{{ r.direccion }}</td>
+            <td>{{ r.total }}</td>
+            <td>{{ r.comentario }}</td>
+          </tr>
+        {% empty %}
+          <!-- Caso sin resultados -->
+          <tr>
+            <td colspan="9" class="text-center text-muted py-4">
+              Sin entregas para los filtros seleccionados.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
 </div>
+
 {% endblock %}
