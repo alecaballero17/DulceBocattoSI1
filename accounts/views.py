@@ -240,3 +240,41 @@ def insumo_delete(request, pk):
             messages.error(request, "No se puede eliminar: está referenciado en recetas/compras/kardex.")
         return redirect("insumos_list")
     return render(request, "accounts/insumo_confirm_delete.html", {"obj": obj})
+
+
+
+# ---------- CU29 ----------
+from .forms import CalificacionForm
+from .models_db import Pedido, Calificacion
+
+
+def calificar_entrega(request, pedido_id):
+    pedido = get_object_or_404(Pedido, pk=pedido_id)
+
+    # Si ya tiene calificación, redirige a mensaje
+    if Calificacion.objects.filter(pedido=pedido).exists():
+        return redirect('calificacion_existente')
+
+    if request.method == 'POST':
+        form = CalificacionForm(request.POST)
+        if form.is_valid():
+            calificacion = form.save(commit=False)
+            calificacion.pedido = pedido
+            calificacion.save()
+            return redirect('calificacion_exitosa')
+    else:
+        form = CalificacionForm()
+
+    return render(
+        request,
+        'accounts/calificar_entrega.html',   # 👈 IMPORTANTE
+        {'form': form, 'pedido': pedido}
+    )
+
+
+def calificacion_exitosa(request):
+    return render(request, 'accounts/calificacion_exitosa.html')  # 👈
+
+
+def calificacion_existente(request):
+    return render(request, 'accounts/calificacion_existente.html')  # 👈

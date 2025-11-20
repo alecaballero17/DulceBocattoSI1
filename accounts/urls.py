@@ -1,5 +1,5 @@
 # accounts/urls.py
-from django.urls import path
+from django.urls import path, include
 from django.contrib.auth.views import LogoutView
 from rest_framework.routers import DefaultRouter
 
@@ -16,6 +16,7 @@ from . import (
 )
 
 # ---------- Reportes (funciones específicas) ----------
+
 # CU18 – Historial de compras de clientes
 from .views_reportes import (
     historial_clientes,
@@ -59,6 +60,12 @@ from .views_reportes import (
 # ---------- Recetas (CU22) ----------
 from .views_recetas import recetas_list, receta_edit
 
+# ---------- CU32 - Producción de pedidos ----------
+from .views_produccion import (
+    pedidos_para_produccion,
+    gestionar_produccion,
+    producir_item,
+)
 
 # ---------- Web ----------
 urlpatterns = [
@@ -123,13 +130,9 @@ urlpatterns = [
     # Recetas (CU22)
     path("recetas/", recetas_list, name="recetas_list"),
     path("recetas/<int:producto_id>/", receta_edit, name="receta_edit"),
-
-    
-
-
 ]
 
-# ---------- Envíos (CORRECCIÓN DEL ERROR) ----------
+# ---------- Envíos ----------
 urlpatterns += [
     path(
         "pedidos/<int:pedido_id>/envio/",
@@ -166,23 +169,28 @@ urlpatterns += [
     path("reportes/ventas/export.pdf",  ventas_reportes_pdf,  name="ventas_reportes_pdf"),
 ]
 
-# CU32 - Producción de pedidos
-from .views_produccion import pedidos_para_produccion, gestionar_produccion, producir_item
-
+# ---------- Producción (CU32) ----------
 urlpatterns += [
     path('produccion/pedidos/', pedidos_para_produccion, name='pedidos_para_produccion'),
     path('produccion/pedido/<int:pedido_id>/', gestionar_produccion, name='gestionar_produccion'),
     path('produccion/pedido/<int:pedido_id>/item/<int:producto_id>/<int:sabor_id>/producir/', producir_item, name='producir_item'),
 ]
 
-
+# ---------- CU29: Calificar entrega ----------
+urlpatterns += [
+    path('calificar/<int:pedido_id>/', views.calificar_entrega, name='calificar_entrega'),
+    path('calificacion_exitosa/', views.calificacion_exitosa, name='calificacion_exitosa'),
+    path('calificacion_existente/', views.calificacion_existente, name='calificacion_existente'),
+]
 
 # ---------- API (CU04) ----------
 import accounts.api as accounts_api
 
 router = DefaultRouter()
-router.register(r"api/permisos", accounts_api.PermisoViewSet)
-router.register(r"api/roles",    accounts_api.RolViewSet)
-router.register(r"api/usuarios", accounts_api.UsuarioViewSet)
+router.register(r"permisos", accounts_api.PermisoViewSet)
+router.register(r"roles",    accounts_api.RolViewSet)
+router.register(r"usuarios", accounts_api.UsuarioViewSet)
 
-urlpatterns += router.urls
+urlpatterns += [
+    path("api/", include(router.urls)),
+]

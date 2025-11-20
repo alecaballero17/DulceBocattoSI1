@@ -514,3 +514,5 @@ class DetallePedido(models.Model):
         managed = False
         db_table = 'detalle_pedido'
         unique_together = (('pedido','producto','sabor'),)  # mantiene la regla de unicidad
+
+

@@ -20,3 +20,16 @@ class InsumoForm(forms.ModelForm):
     class Meta:
         model = Insumo
         fields = ["nombre", "unidad_medida", "cantidad_disponible"]
+
+# ---------- CU29 ----------
+from django import forms
+from .models_db import Calificacion
+
+class CalificacionForm(forms.ModelForm):
+    class Meta:
+        model = Calificacion
+        fields = ['puntaje', 'comentario']
+        widgets = {
+            'puntaje': forms.Select(choices=[(i, i) for i in range(1, 6)]),  # Opciones de 1 a 5 estrellas
+            'comentario': forms.Textarea(attrs={'rows': 4, 'placeholder': 'Deja tu comentario...'}),
+        }
