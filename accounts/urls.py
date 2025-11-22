@@ -1,4 +1,3 @@
-# accounts/urls.py
 from django.urls import path, include
 from django.contrib.auth.views import LogoutView
 from rest_framework.routers import DefaultRouter
@@ -115,6 +114,14 @@ urlpatterns = [
     path("pedidos/confirmados/", views_pedidos.pedidos_confirmados, name="pedidos_confirmados"),
     path("pedidos/<int:pedido_id>/", views_pedidos.pedido_detalle, name="pedido_detalle"),
     path("pedidos/<int:pedido_id>/editar/", views_pedidos.pedido_editar, name="pedido_editar"),
+
+    # ✅ Ruta para que el CLIENTE marque "Ya lo recibí"
+    path(
+    "pedidos/<int:pedido_id>/recibido/",
+    views_pedidos.pedido_recibido,
+    name="pedido_recibido",
+),
+
 
     # Pagos (manual CU16 + Stripe)
     path("pedidos/<int:pedido_id>/pago/", views_pedidos.pago_registrar, name="pago_registrar"),

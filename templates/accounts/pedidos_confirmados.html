@@ -64,10 +64,19 @@
             {% if p.calificacion %}
               <span class="badge text-bg-success">Calificado</span><br>
               <small>{{ p.calificacion.comentario }}</small>
+
             {% elif p.estado == "ENTREGADO" %}
+              {# Ya entregado → puede calificar #}
               <a href="{% url 'calificar_entrega' p.id %}" class="btn btn-warning btn-sm">
                 Calificar
               </a>
+
+            {% elif p.estado == "CONFIRMADO" or p.estado == "LISTO_ENTREGA" %}
+              {# El negocio ya lo tiene listo / confirmado → cliente puede decir "Ya lo recibí" #}
+              <a href="{% url 'pedido_recibido' p.id %}" class="btn btn-outline-success btn-sm">
+                Ya lo recibí
+              </a>
+
             {% else %}
               <span class="text-muted">No disponible</span>
             {% endif %}
