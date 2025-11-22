@@ -1,6 +1,13 @@
-{% extends 'base_generic.html' %}
-
+{% extends "base.html" %}
 {% block content %}
-  <h1>¡Gracias por tu calificación!</h1>
-  <p>Tu comentario y calificación han sido recibidos correctamente.</p>
+
+<div class="container py-4">
+  <h2>¡Gracias por tu calificación! ✅</h2>
+  <p>Tu puntaje y comentario se han guardado correctamente.</p>
+
+  <a href="{% url 'pedidos_confirmados' %}" class="btn btn-primary mt-3">
+    Volver a Mis pedidos
+  </a>
+</div>
+
 {% endblock %}

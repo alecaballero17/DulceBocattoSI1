@@ -1,6 +1,13 @@
-{% extends 'base_generic.html' %}
-
+{% extends "base.html" %}
 {% block content %}
-  <h1>Ya has calificado este pedido</h1>
-  <p>No es posible calificar el pedido más de una vez.</p>
+
+<div class="container py-4">
+  <h2>Este pedido ya fue calificado 😉</h2>
+  <p>Solo puedes enviar una calificación por pedido.</p>
+
+  <a href="{% url 'pedidos_confirmados' %}" class="btn btn-secondary mt-3">
+    Volver a Mis pedidos
+  </a>
+</div>
+
 {% endblock %}

@@ -93,14 +93,18 @@
           <th class="text-nowrap">
             <a href="?q={{ q }}&estado={{ estado }}&d1={{ d1 }}&d2={{ d2 }}&sort=repartidor&dir={{ next_dir_rep }}">
               Repartidor
-              {% if sort == "repartidor" %}<small class="text-muted">({{ dir|upper }})</small>{% endif %}
+              {% if sort == "repartidor" %}
+                <small class="text-muted">({{ dir|upper }})</small>
+              {% endif %}
             </a>
           </th>
 
           <th class="text-nowrap">
             <a href="?q={{ q }}&estado={{ estado }}&d1={{ d1 }}&d2={{ d2 }}&sort=cliente&dir={{ next_dir_cli }}">
               Cliente
-              {% if sort == "cliente" %}<small class="text-muted">({{ dir|upper }})</small>{% endif %}
+              {% if sort == "cliente" %}
+                <small class="text-muted">({{ dir|upper }})</small>
+              {% endif %}
             </a>
           </th>
 
@@ -109,7 +113,9 @@
           <th class="text-nowrap">
             <a href="?q={{ q }}&estado={{ estado }}&d1={{ d1 }}&d2={{ d2 }}&sort=estado&dir={{ next_dir_est }}">
               Estado
-              {% if sort == "estado" %}<small class="text-muted">({{ dir|upper }})</small>{% endif %}
+              {% if sort == "estado" %}
+                <small class="text-muted">({{ dir|upper }})</small>
+              {% endif %}
             </a>
           </th>
 
@@ -130,17 +136,17 @@
 
             <td>
               {% with est=r.estado|upper %}
-                  {% if est == "ENTREGADO" %}
-                      <span class="badge text-bg-success">{{ r.estado }}</span>
-                  {% elif est == "EN_CAMINO" %}
-                      <span class="badge text-bg-warning">{{ r.estado }}</span>
-                  {% elif est == "PENDIENTE" %}
-                      <span class="badge text-bg-secondary">{{ r.estado }}</span>
-                  {% elif est == "CANCELADO" %}
-                      <span class="badge text-bg-danger">{{ r.estado }}</span>
-                  {% else %}
-                      <span class="badge text-bg-light">{{ r.estado }}</span>
-                  {% endif %}
+                {% if est == "ENTREGADO" %}
+                  <span class="badge text-bg-success">{{ r.estado }}</span>
+                {% elif est == "EN_CAMINO" %}
+                  <span class="badge text-bg-warning">{{ r.estado }}</span>
+                {% elif est == "PENDIENTE" %}
+                  <span class="badge text-bg-secondary">{{ r.estado }}</span>
+                {% elif est == "CANCELADO" %}
+                  <span class="badge text-bg-danger">{{ r.estado }}</span>
+                {% else %}
+                  <span class="badge text-bg-light">{{ r.estado }}</span>
+                {% endif %}
               {% endwith %}
             </td>
 
@@ -148,26 +154,17 @@
             <td>{{ r.direccion }}</td>
             <td>{{ r.total }}</td>
 
-            <!-- ==========================================
-                 COLUMNA DE CALIFICACIÓN COMPLETAMENTE NUEVA
-                 ========================================== -->
+            <!-- COLUMNA DE CALIFICACIÓN (SOLO LECTURA PARA EL ADMIN) -->
             <td>
               {% if r.comentario %}
                   <span class="badge text-bg-success">Calificado</span><br>
                   <small>{{ r.comentario }}</small>
-
-              {% elif r.estado and r.estado|upper == "ENTREGADO" %}
-                  <a href="{% url 'calificar_entrega' r.pedido_id %}" class="btn btn-warning btn-sm">
-                      Calificar pedido
-                  </a>
-
               {% else %}
-                  <span class="text-muted">No disponible</span>
+                  <span class="text-muted">Sin calificación</span>
               {% endif %}
             </td>
 
           </tr>
-
         {% empty %}
           <tr>
             <td colspan="9" class="text-center text-muted py-4">
