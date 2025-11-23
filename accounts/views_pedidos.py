@@ -42,18 +42,30 @@ def _fetch_detalle(pedido_id: int):
 
 
 def _recalcular_total(pedido_id: int):
+    """
+    Recalcula el total del pedido considerando:
+    total = items + costo_envio - descuentos_aplicados
+    """
     with connection.cursor() as cur:
         cur.execute("""
             UPDATE pedido p
             JOIN (
-              SELECT pedido_id, SUM(cantidad*precio_unitario) AS items
+              SELECT pedido_id, SUM(cantidad * precio_unitario) AS items
               FROM detalle_pedido
-              WHERE pedido_id=%s
+              WHERE pedido_id = %s
               GROUP BY pedido_id
-            ) x ON x.pedido_id=p.id
-            SET p.total = x.items + p.costo_envio
-            WHERE p.id=%s
-        """, [pedido_id, pedido_id])
+            ) x ON x.pedido_id = p.id
+            LEFT JOIN (
+              SELECT pedido_id, COALESCE(SUM(monto_aplicado),0) AS descuentos
+              FROM pedido_descuento
+              WHERE pedido_id = %s
+              GROUP BY pedido_id
+            ) d ON d.pedido_id = p.id
+            SET p.total = x.items + p.costo_envio - COALESCE(d.descuentos, 0)
+            WHERE p.id = %s
+        """, [pedido_id, pedido_id, pedido_id])
+
+
 
 
 def _total_pagado(pedido_id: int) -> Decimal:
@@ -353,3 +365,5 @@ def pedido_recibido(request, pedido_id):
     )
     # Te mando directo al formulario de calificación (CU29)
     return redirect("calificar_entrega", pedido_id=pedido.id)
+
+

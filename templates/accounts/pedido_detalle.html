@@ -122,4 +122,12 @@
   </a>
 {% endif %}
 
+{% if request.user.is_staff %}
+  <a href="{% url 'aplicar_descuento_pedido' pedido.id %}" 
+     class="btn btn-sm btn-outline-primary mt-2">
+      💸 Aplicar descuento
+  </a>
+{% endif %}
+
+
 {% endblock %}

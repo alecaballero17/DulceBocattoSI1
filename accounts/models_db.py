@@ -1,6 +1,6 @@
 # accounts/models_db.py
+from decimal import Decimal
 from django.db import models
-
 
 # ============================
 # Tablas del admin de Django (solo lectura)
@@ -281,22 +281,9 @@ class ProductoSabor(models.Model):
         return f"{self.producto} - {self.sabor}"
 
 
-class Descuento(models.Model):
-    nombre = models.CharField(max_length=120)
-    tipo = models.CharField(max_length=10)  # 'FIJO' | 'PORCENTAJE'
-    valor = models.DecimalField(max_digits=12, decimal_places=2)
-    activo = models.IntegerField(blank=True, null=True)
-
-    class Meta:
-        managed = False
-        db_table = 'descuento'
-
-    def __str__(self):
-        return f"{self.nombre} ({self.tipo})"
-    
-
-# (arriba del modelo Pedido)
-from django.db import models
+# ----------------------------
+# Estados de Pedido
+# ----------------------------
 
 class EstadoPedido(models.TextChoices):
     PENDIENTE      = 'PENDIENTE', 'Pendiente'
@@ -307,19 +294,16 @@ class EstadoPedido(models.TextChoices):
     CANCELADO      = 'CANCELADO', 'Cancelado'
 
 
-
-# Reemplaza tu modelo Pedido actual por este (o ajusta solo el field estado)
 class Pedido(models.Model):
     id = models.AutoField(primary_key=True)
     cliente = models.ForeignKey(Cliente, models.DO_NOTHING, db_column='cliente_id')
 
-    # ✅ sube max_length y agrega choices
     estado = models.CharField(
-        max_length=20,                      # antes tenías 10
-        choices=EstadoPedido.choices,       # valida contra los 6 estados
+        max_length=20,
+        choices=EstadoPedido.choices,
         blank=True,
-        null=True,                          # déjalo True si en tu BD hay nulls
-        default=EstadoPedido.PENDIENTE,     # opcional pero recomendado
+        null=True,
+        default=EstadoPedido.PENDIENTE,
     )
 
     metodo_envio = models.CharField(max_length=20)  # RETIRO/DELIVERY
@@ -336,18 +320,6 @@ class Pedido(models.Model):
 
     def __str__(self):
         return f"Pedido #{self.id} ({self.estado})"
-
-
-class PedidoDescuento(models.Model):
-    id = models.BigAutoField(primary_key=True)
-    pedido = models.ForeignKey(Pedido, models.DO_NOTHING, db_column='pedido_id')
-    descuento = models.ForeignKey(Descuento, models.DO_NOTHING, db_column='descuento_id')
-    monto_aplicado = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
-
-    class Meta:
-        managed = False
-        db_table = 'pedido_descuento'
-        unique_together = (('pedido', 'descuento'),)
 
 
 class Envio(models.Model):
@@ -421,8 +393,6 @@ class Kardex(models.Model):
         db_table = 'kardex'
 
 
-
-
 # ============================
 # Compras & Proveedores
 # ============================
@@ -464,7 +434,7 @@ class CompraDetalle(models.Model):
     insumo = models.ForeignKey(Insumo, models.DO_NOTHING, db_column='insumo_id')
     cantidad = models.DecimalField(max_digits=12, decimal_places=3)
     costo_unitario = models.DecimalField(max_digits=12, decimal_places=2)
-    # No declarar 'subtotal' (columna generada en MySQL)
+    # columna subtotal es generada en MySQL
 
     class Meta:
         managed = False
@@ -475,11 +445,14 @@ class CompraDetalle(models.Model):
         return f"{self.compra} · {self.insumo} · {self.cantidad}"
 
 
-
+# ============================
+# Pagos & Detalle de pedido
+# ============================
 # accounts/models_db.py
 from decimal import Decimal
 from django.db import models
 
+# --- Pago ---
 class Pago(models.Model):
     id = models.AutoField(primary_key=True)
     pedido = models.ForeignKey('Pedido', db_column='pedido_id', on_delete=models.DO_NOTHING)
@@ -498,21 +471,73 @@ class Pago(models.Model):
         return f"Pago #{self.id} – {self.metodo} – {self.monto}"
 
 
-
-
 # --- Detalle de Pedido ---
 class DetallePedido(models.Model):
-    id = models.BigAutoField(primary_key=True)  # <— necesario
-    pedido   = models.ForeignKey(Pedido,   models.DO_NOTHING, db_column='pedido_id')
-    producto = models.ForeignKey(Producto, models.DO_NOTHING, db_column='producto_id')
-    sabor    = models.ForeignKey(Sabor,    models.DO_NOTHING, db_column='sabor_id')
+    id = models.BigAutoField(primary_key=True)
+    pedido   = models.ForeignKey('Pedido',   models.DO_NOTHING, db_column='pedido_id')
+    producto = models.ForeignKey('Producto', models.DO_NOTHING, db_column='producto_id')
+    sabor    = models.ForeignKey('Sabor',    models.DO_NOTHING, db_column='sabor_id')
     cantidad = models.IntegerField()
     precio_unitario = models.DecimalField(max_digits=12, decimal_places=2)
-    sub_total = models.DecimalField(max_digits=12, decimal_places=2)  # columna generada en MySQL
+    sub_total = models.DecimalField(max_digits=12, decimal_places=2)
 
     class Meta:
         managed = False
         db_table = 'detalle_pedido'
-        unique_together = (('pedido','producto','sabor'),)  # mantiene la regla de unicidad
+        unique_together = (('pedido','producto','sabor'),)
 
 
+# ============================
+# Descuentos
+# ============================
+class Descuento(models.Model):
+    TIPO_FIJO = "FIJO"
+    TIPO_PORCENTAJE = "PORCENTAJE"
+    TIPO_CHOICES = [
+        (TIPO_FIJO, "Monto fijo"),
+        (TIPO_PORCENTAJE, "Porcentaje (%)"),
+    ]
+
+    # OJO: no declaramos 'id', Django usará el que ya existe en MySQL.
+    nombre = models.CharField(max_length=120)
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES)
+    valor = models.DecimalField(max_digits=12, decimal_places=2)
+    activo = models.BooleanField(default=True)
+
+    class Meta:
+        managed = False         # tabla ya existe
+        db_table = "descuento"
+        ordering = ["nombre"]
+
+    def __str__(self):
+        return f"{self.nombre} ({self.tipo} {self.valor})"
+
+
+class PedidoDescuento(models.Model):
+    # Usamos pedido como PK para que Django NO genere un campo "id"
+    pedido = models.OneToOneField(
+        'Pedido',
+        on_delete=models.CASCADE,
+        db_column='pedido_id',
+        primary_key=True,
+    )
+    descuento = models.ForeignKey(
+        Descuento,
+        on_delete=models.PROTECT,
+        db_column='descuento_id',
+    )
+    monto_aplicado = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        managed = False         # tabla ya existe
+        db_table = "pedido_descuento"
+        # Si en la BD hay PK compuesta (pedido_id, descuento_id),
+        # esto no molesta; sólo evitamos el "id" fantasma.
+
+    def __str__(self):
+        return f"Desc. {self.descuento} en pedido #{self.pedido_id}"

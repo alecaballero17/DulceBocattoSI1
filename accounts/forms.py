@@ -33,3 +33,19 @@ class CalificacionForm(forms.ModelForm):
             'puntaje': forms.Select(choices=[(i, i) for i in range(1, 6)]),  # Opciones de 1 a 5 estrellas
             'comentario': forms.Textarea(attrs={'rows': 4, 'placeholder': 'Deja tu comentario...'}),
         }
+
+
+from django import forms
+from .models_db import Descuento
+
+
+class DescuentoForm(forms.ModelForm):
+    class Meta:
+        model = Descuento
+        fields = ["nombre", "tipo", "valor", "activo"]
+        labels = {
+            "nombre": "Nombre de la promoción",
+            "tipo": "Tipo de descuento",
+            "valor": "Valor (monto o %)",
+            "activo": "Activo",
+        }
