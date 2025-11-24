@@ -15,9 +15,9 @@
   <!-- Estilos Dulce Bocatto -->
   <style>
     :root {
-      --rosa: #ff80aa;   /* Rosa pastel del logo */
-      --cafe: #5a3a29;   /* Café galleta/chocolate */
-      --celeste: #82cfd1;/* Celeste/mint del cupcake */
+      --rosa: #ff80aa;
+      --cafe: #5a3a29;
+      --celeste: #82cfd1;
       --blanco: #ffffff;
     }
 
@@ -30,20 +30,48 @@
 
     /* Navbar */
     .navbar { background-color: var(--rosa) !important; }
-    .navbar-brand { font-weight: bold; color: var(--blanco) !important; }
-    .navbar .btn {
-      border-color: var(--blanco) !important;
-      color: var(--blanco) !important;
-    }
-    .navbar .btn:hover {
-      background-color: var(--cafe) !important;
+    .navbar-brand {
+      font-weight: bold;
       color: var(--blanco) !important;
     }
 
-    /* Botones primarios */
+    .navbar .nav-link {
+      color: var(--blanco) !important;
+      font-weight: 500;
+      margin-right: 0.5rem;
+      border-radius: 999px;
+      padding-inline: 0.8rem;
+    }
+
+    .navbar .nav-link:hover,
+    .navbar .nav-link.active {
+      background-color: rgba(255,255,255,0.8);
+      color: var(--cafe) !important;
+    }
+
+    .dropdown-menu {
+      border-radius: 10px;
+      padding: 0.5rem 0;
+    }
+
+    .dropdown-item:hover {
+      background-color: var(--rosa);
+      color: var(--blanco) !important;
+    }
+
+    /* Botones */
+    .btn-outline-light {
+      border-radius: 999px;
+      font-weight: 500;
+    }
+
+    /* Botón principal rosa */
     .btn-primary {
       background-color: var(--rosa) !important;
       border-color: var(--rosa) !important;
+      border-radius: 999px;
+      font-weight: 600;
+      padding-inline: 1.4rem;
     }
     .btn-primary:hover {
       background-color: var(--cafe) !important;
@@ -51,72 +79,108 @@
     }
 
     /* Títulos */
-    h1, h2, h3, h4 { color: var(--cafe); font-weight: bold; }
+    h1, h2, h3, h4 {
+      color: var(--cafe);
+      font-weight: bold;
+    }
 
-    /* Footer pegado abajo */
+    /* Footer */
     footer {
       background-color: var(--cafe) !important;
       color: var(--blanco) !important;
       margin-top: auto;
     }
-
-    /* Badge ejemplo */
-    .badge.text-bg-success {
-      background-color: var(--celeste) !important;
-      color: var(--cafe) !important;
-    }
   </style>
 </head>
+
 <body>
 
   <!-- Navbar -->
   <nav class="navbar navbar-expand-lg">
     <div class="container">
+
+      <!-- Logo -->
       <a class="navbar-brand d-flex align-items-center" href="{% url 'home' %}">
         <img src="{% static 'images/logo.png' %}" alt="Dulce Bocatto" width="40" class="me-2">
         Dulce Bocatto
       </a>
 
-      <div class="ms-auto">
+      <!-- Móvil -->
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+
+      <!-- Contenido -->
+      <div class="collapse navbar-collapse" id="mainNavbar">
+
+        <!-- IZQUIERDA -->
         {% if user.is_authenticated %}
-          <a class="btn btn-sm btn-outline-light me-2" href="{% url 'catalogo' %}">Catálogo</a>
-          <a class="btn btn-sm btn-outline-light me-2" href="{% url 'perfil' %}">Perfil</a>
+        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
 
-          <!-- CU15: Pedidos confirmados -->
-          <a class="btn btn-sm btn-outline-light me-2" href="{% url 'pedidos_confirmados' %}">
-            Mis Pedidos
-          </a>
+          <li class="nav-item">
+            <a class="nav-link" href="{% url 'catalogo' %}">Catálogo</a>
+          </li>
 
-          <a class="btn btn-sm btn-outline-light me-2" href="{% url 'compras_list' %}">Compras</a>
+          <li class="nav-item">
+            <a class="nav-link" href="{% url 'pedidos_confirmados' %}">Mis pedidos</a>
+          </li>
 
-          <form action="{% url 'logout' %}" method="post" class="d-inline">
-            {% csrf_token %}
-            <button class="btn btn-sm btn-outline-light">Salir</button>
-          </form>
-        {% else %}
-          <a class="btn btn-sm btn-outline-light me-2" href="{% url 'login' %}">Iniciar sesión</a>
-          <a class="btn btn-sm btn-outline-light" href="{% url 'register' %}">Regístrate</a>
+          <li class="nav-item">
+            <a class="nav-link" href="{% url 'compras_list' %}">Compras</a>
+          </li>
+
+          <!-- Dropdown Reportes -->
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+              Reportes
+            </a>
+            <ul class="dropdown-menu">
+              <li><a class="dropdown-item" href="{% url 'historial_clientes' %}">Historial de pedidos</a></li>
+              <li><a class="dropdown-item" href="{% url 'ventas_diarias' %}">Ventas diarias</a></li>
+              <li><a class="dropdown-item" href="{% url 'historial_proveedores' %}">Compras a proveedores</a></li>
+              <li><a class="dropdown-item" href="{% url 'historial_entregas' %}">Historial de entregas</a></li>
+              <li><a class="dropdown-item" href="{% url 'ventas_reportes' %}">Reportes de ventas</a></li>
+              <li><a class="dropdown-item" href="{% url 'pedidos_para_produccion' %}">Pedidos para producción</a></li>
+            </ul>
+          </li>
+
+        </ul>
         {% endif %}
 
-        {% if request.user.is_authenticated and perms %}
-          <a class="btn btn-link" href="{% url 'historial_clientes' %}">Historial de Pedidos</a>
-          <a class="btn btn-outline-light" href="{% url 'ventas_diarias' %}">Ventas diarias</a>
-          <a class="btn btn-outline-light" href="{% url 'historial_proveedores' %}">Compras a Proveedores</a>
-          <a class="btn btn-outline-light" href="{% url 'historial_entregas' %}">Historial de Entregas</a>
-          <li class="nav-item"><a class="nav-link" href="{% url 'ventas_reportes' %}">Reportes de Ventas</a></li>
-          <a class="btn btn-outline-light" href="{% url 'pedidos_para_produccion' %}">Pedidos para Producción</a>
-        {% endif %}
+        <!-- DERECHA -->
+        <div class="d-flex align-items-center">
+
+          {% if user.is_authenticated %}
+            <a class="btn btn-sm btn-outline-light me-2" href="{% url 'perfil' %}">Mi perfil</a>
+
+            <form action="{% url 'logout' %}" method="post" class="d-inline">
+              {% csrf_token %}
+              <button class="btn btn-sm btn-outline-light">Salir</button>
+            </form>
+          {% else %}
+            <a class="btn btn-sm btn-outline-light me-2" href="{% url 'login' %}">Iniciar sesión</a>
+            <a class="btn btn-sm btn-outline-light" href="{% url 'register' %}">Regístrate</a>
+          {% endif %}
+
+        </div>
+
       </div>
     </div>
   </nav>
 
-  <!-- Mensajes flash -->
+  <!-- Alertas -->
   {% if messages %}
     <div class="container mt-3">
       {% for message in messages %}
-        <div class="alert {% if message.tags == 'error' %}alert-danger{% else %}alert-{{ message.tags|default:'info' }}{% endif %} alert-dismissible fade show" role="alert">
+        <div class="alert 
+          {% if message.tags == 'error' %}
+            alert-danger
+          {% else %}
+            alert-{{ message.tags|default:'info' }}
+          {% endif %}
+          alert-dismissible fade show" role="alert">
           {{ message }}
-          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
       {% endfor %}
     </div>
