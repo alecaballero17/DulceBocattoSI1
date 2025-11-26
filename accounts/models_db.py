@@ -397,8 +397,11 @@ class Kardex(models.Model):
 # Compras & Proveedores
 # ============================
 
+
+
 class Proveedor(models.Model):
     nombre = models.CharField(max_length=150)
+    tipo = models.CharField(max_length=150, blank=True, null=True)  # 👈 nuevo campo
     telefono = models.CharField(max_length=40, blank=True, null=True)
     direccion = models.CharField(max_length=200, blank=True, null=True)
 
@@ -409,6 +412,8 @@ class Proveedor(models.Model):
 
     def __str__(self):
         return self.nombre
+
+
 
 
 class Compra(models.Model):

@@ -156,9 +156,10 @@ def proveedor_create(request):
         form = ProveedorForm(request.POST)
         if form.is_valid():
             prov = form.save()
-            log_event(request, "Proveedor", prov.id, "CREAR", prov.nombre)
-            messages.success(request, "Proveedor creado.")
-            return redirect("proveedores_list")
+            log_event(request, "Proveedor", prov.id, "CREAR")
+            return redirect('proveedores_list')
+
+
     else:
         form = ProveedorForm()
     return render(request, "accounts/proveedor_form.html", {"form": form, "modo": "Crear"})
@@ -171,10 +172,10 @@ def proveedor_update(request, pk):
     if request.method == "POST":
         form = ProveedorForm(request.POST, instance=prov)
         if form.is_valid():
-            form.save()
-            log_event(request, "Proveedor", prov.id, "ACTUALIZAR", prov.nombre)
-            messages.success(request, "Proveedor actualizado.")
-            return redirect("proveedores_list")
+            prov = form.save()
+            log_event(request, "Proveedor", prov.id, "ACTUALIZAR")
+            return redirect('proveedores_list')
+
     else:
         form = ProveedorForm(instance=prov)
     return render(request, "accounts/proveedor_form.html", {"form": form, "modo": "Editar"})
